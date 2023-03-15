@@ -142,6 +142,17 @@ class DRTVIE(InfoExtractor):
         },
     }]
 
+    def get_video_id_from_dr_radio_page(self, webpage):
+        """Custom fix to retrieve the video id from a radio page."""
+        json_string = self._search_regex(
+            r'__NEXT_DATA__[^>]*>(.*)<\/script>',
+            webpage,
+            'next_data'
+        )
+        json_blob = self._parse_json(json_string, '1')
+        video_id = json_blob["props"]["pageProps"]["episode"]["productionNumber"]
+        return video_id
+
     def _real_extract(self, url):
         raw_video_id = self._match_id(url)
 
@@ -170,15 +181,23 @@ class DRTVIE(InfoExtractor):
             programcard_url = '%s/%s' % (_PROGRAMCARD_BASE, video_id)
         else:
             programcard_url = _PROGRAMCARD_BASE
-            page = self._parse_json(
-                self._search_regex(
-                    r'data\s*=\s*({.+?})\s*(?:;|</script)', webpage,
-                    'data'), '1')['cache']['page']
-            page = page[list(page.keys())[0]]
-            item = try_get(
-                page, (lambda x: x['item'], lambda x: x['entries'][0]['item']),
-                dict)
-            video_id = item['customId'].split(':')[-1]
+
+            is_dr_radio_url = "dr.dk/lyd" in url
+            if is_dr_radio_url:
+                # Custom fix.
+                video_id = self.get_video_id_from_dr_radio_page(webpage)
+            else:
+                # The default behavior.
+                page = self._parse_json(
+                    self._search_regex(
+                        r'data\s*=\s*({.+?})\s*(?:;|</script)', webpage,
+                        'data'), '1')['cache']['page']
+                page = page[list(page.keys())[0]]
+                item = try_get(
+                    page, (lambda x: x['item'], lambda x: x['entries'][0]['item']),
+                    dict)
+                video_id = item['customId'].split(':')[-1]
+
             query['productionnumber'] = video_id
 
         data = self._download_json(
